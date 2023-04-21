@@ -1,11 +1,14 @@
+from dotenv import dotenv_values
 from models import DatabaseConnector
 
 
-connector = DatabaseConnector(dbname='pagila',
-                              user='postgres',
-                              password='secret',
-                              host='localhost',
-                              port=5432)
+config = dotenv_values(".env")
+
+connector = DatabaseConnector(dbname=config['dbname'],
+                              user=config['user'],
+                              password=config['password'],
+                              host=config['host'],
+                              port=config['port'])
 
 connector.connect()
 
@@ -110,14 +113,7 @@ with open('queries.sql', 'w') as f:
 
 for el in queries:
     res = connector.fetch_data(el)
-    with open('result.sql', 'w') as r:
+    with open('result.txt', 'w') as r:
         r.write(f'{res}\n')
 
 connector.close()
-
-
-# run with port
-# docker run --name postgres -p 5432:5432 -e POSTGRES_PASSWORD=secret -d postgres
-
-# docker run --name habr-pg-13.3 -p 5432:5432 -e POSTGRES_USER=habrpguser -e POSTGRES_PASSWORD=pgpwd4habr -e POSTGRES_DB=habrdb -d postgres:13.3
-
