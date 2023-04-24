@@ -1,26 +1,19 @@
-from dotenv import dotenv_values
-from models import DatabaseConnector
+#!/bin/bash
 
+set -e
 
-config = dotenv_values(".env")
+cat /docker-entrypoint-initdb.d/pagila-schema.sql | psql -U postgres -d pagila
+cat /docker-entrypoint-initdb.d/pagila-data.sql | psql -U postgres -d pagila
 
-connector = DatabaseConnector(dbname=config['DATABASE'],
-                              user=config['USER'],
-                              password=config['DB_PASSWORD'],
-                              host="172.17.0.2",
-                              port=5432)
-
-connector.connect()
-
-queries = [
-    '''select name, count(film_id) as count
+psql -U postgres -d pagila -c "select name, count(film_id) as count
 from film_category
 join category using(category_id)
 group by name
-order by count desc;''',
-    '''Select name
+order by count desc;" > city.txt
+
+psql -U postgres -d pagila -c "Select name
 From (
-select concat(first_name, ' ', last_name) as name,  count(rental_date) as count 
+select concat(first_name, ' ', last_name) as name,  count(rental_date) as count
 from actor right join film_actor using(actor_id)
 Join film using(film_id)
 Join inventory using(film_id)
@@ -28,11 +21,12 @@ Join rental using(inventory_id)
 group by name
 Order by count Desc
 Limit 10
-) as t;''',
-    '''Select name
+) as t;" >> city.txt
+
+psql -U postgres -d pagila -c "Select name
 From (
 Select name, sum(amount) as total_sum
-From category 
+From category
 Join film_category using(category_id)
 Join film using(film_id)
 Join inventory using(film_id)
@@ -41,12 +35,14 @@ Join payment using(rental_id)
 Group by name
 Order by total_sum desc
 Limit 1
-) as t;''',
-    '''Select distinct title
+) as t;" >> city.txt
+
+psql -U postgres -d pagila -c "Select distinct title
 From film
 Left Join inventory using(film_id)
-Where inventory_id is null;''',
-    '''With temp_table as (
+Where inventory_id is null;" >> city.txt
+
+psql -U postgres -d pagila -c "With temp_table as (
 Select first_name, last_name, count(actor_id) as count
 From actor
 Join film_actor using(actor_id)
@@ -61,20 +57,22 @@ Order by count desc
 Select concat(first_name, ' ', last_name) as name
 From temp_table
 Where count in (
-select distinct count 
+select distinct count
 from temp_table
 Order by count desc
 limit 3
-);''',
-    '''Select city,
-COUNT(CASE WHEN customer.active = 1 THEN 1 END) AS active_customers, 
+);" >> city.txt
+
+psql -U postgres -d pagila -c "Select city,
+COUNT(CASE WHEN customer.active = 1 THEN 1 END) AS active_customers,
 COUNT(CASE WHEN customer.active = 0 THEN 1 END) AS inactive_customers
 From customer
 Join address using(address_id)
 Join city using(city_id)
 Group by city
-Order by inactive_customers desc;''',
-    '''With rental_hours as (
+Order by inactive_customers desc;" >> city.txt
+
+psql -U postgres -d pagila -c "With rental_hours as (
 Select category.name, sum(DATE_PART('hour', return_date - rental_date)) as  total_rental_hours
 From customer c
 Join address a on c.address_id = a.address_id
@@ -104,16 +102,4 @@ Select name from rental_hours
 Where total_rental_hours = (
 Select max(total_rental_hours)
 From rental_hours
-);'''
-]
-
-with open('queries.sql', 'w') as f:
-    for num, query in enumerate(queries):
-        f.write(f"/* Query №{num+1} */\n" + query + '\n\n')
-
-for el in queries:
-    res = connector.fetch_data(el)
-    with open('result.txt', 'w') as r:
-        r.write(f'{res}\n')
-
-connector.close()
+);" >> city.txt
